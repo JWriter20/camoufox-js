@@ -8,6 +8,9 @@ import {
 } from "./exceptions.js";
 import { OS_NAME } from "./pkgman.js";
 
+// Safe timeout for xvfb writing display num, prevents infinite hang
+const DISPLAYFD_READ_TIMEOUT_MS = 10_000;
+
 export class VirtualDisplay {
 	private debug: boolean;
 	private proc: ChildProcess | null = null;
@@ -96,20 +99,33 @@ export class VirtualDisplay {
 
 		if (!this.proc) {
 			this.proc = this.spawnXvfb();
-			// Xvfb writes "<display>\n" to fd 3 and closes it. If Xvfb
-			// fails to bind anywhere, it exits without writing, so the
-			// pipe ends without yielding chunks and the parseInt below
-			// throws — which is what we want.
+			const stream = this.proc.stdio[3] as Readable;
+			const timer = setTimeout(
+				() =>
+					stream.destroy(
+						new CannotExecuteXvfb(
+							`Xvfb did not report a display within ${DISPLAYFD_READ_TIMEOUT_MS}ms`,
+						),
+					),
+				DISPLAYFD_READ_TIMEOUT_MS,
+			);
 			let buf = "";
-			for await (const chunk of this.proc.stdio[3] as Readable) {
-				buf += chunk;
-				if (buf.includes("\n")) break;
+			try {
+				for await (const chunk of stream) {
+					buf += chunk;
+					if (buf.includes("\n")) break;
+				}
+			} catch (err) {
+				this.kill();
+				throw err;
+			} finally {
+				clearTimeout(timer);
 			}
 			const n = Number.parseInt(buf, 10);
 			if (!Number.isFinite(n)) {
 				this.kill();
 				throw new CannotExecuteXvfb(
-					`Xvfb did not report a display (got ${JSON.stringify(buf)})`,
+					`Xvfb did not report a display (got ${JSON.stringify(buf)}, exit=${this.proc.exitCode})`,
 				);
 			}
 			this._display = n;
