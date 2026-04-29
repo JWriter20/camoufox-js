@@ -1,9 +1,6 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { randomInt } from "node:crypto";
-import { existsSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { globSync } from "glob";
+import { accessSync, constants as fsConstants } from "node:fs";
+import type { Readable } from "node:stream";
 import {
 	CannotExecuteXvfb,
 	CannotFindXvfb,
@@ -15,7 +12,6 @@ export class VirtualDisplay {
 	private debug: boolean;
 	private proc: ChildProcess | null = null;
 	private _display: number | null = null;
-	// private _lock = new Lock();
 
 	constructor(debug: boolean = false) {
 		this.debug = debug;
@@ -49,88 +45,88 @@ export class VirtualDisplay {
 	}
 
 	private get xvfb_path(): string {
-		const path = execFileSync("which", ["Xvfb"]).toString().trim();
-		if (!path) {
+		let resolved: string;
+		try {
+			resolved = execFileSync("which", ["Xvfb"]).toString().trim();
+		} catch {
 			throw new CannotFindXvfb("Please install Xvfb to use headless mode.");
 		}
-		if (!existsSync(path) || !execFileSync("test", ["-x", path])) {
+		if (!resolved) {
+			throw new CannotFindXvfb("Please install Xvfb to use headless mode.");
+		}
+		try {
+			accessSync(resolved, fsConstants.X_OK);
+		} catch {
 			throw new CannotExecuteXvfb(
-				`I do not have permission to execute Xvfb: ${path}`,
+				`I do not have permission to execute Xvfb: ${resolved}`,
 			);
 		}
-		return path;
-	}
-
-	private get xvfb_cmd(): string[] {
-		return [this.xvfb_path, `:${this.display}`, ...this.xvfb_args];
-	}
-
-	private execute_xvfb(): void {
-		if (this.debug) {
-			console.log("Starting virtual display:", this.xvfb_cmd.join(" "));
-		}
-		this.proc = spawn(this.xvfb_cmd[0], this.xvfb_cmd.slice(1), {
-			stdio: this.debug ? "inherit" : "ignore",
-			detached: true,
-		});
-	}
-
-	public get(): string {
-		VirtualDisplay.assert_linux();
-
-		// this._lock.runExclusive(() => {
-		if (!this.proc) {
-			this.execute_xvfb();
-		} else if (this.debug) {
-			console.log(`Using virtual display: ${this.display}`);
-		}
-		// });
-
-		return `:${this.display}`;
-	}
-
-	public kill(): void {
-		// this._lock.runExclusive(() => {
-		if (this.proc && !this.proc.killed) {
-			if (this.debug) {
-				console.log("Terminating virtual display:", this.display);
-			}
-			this.proc.kill();
-		}
-		// });
+		return resolved;
 	}
 
 	/**
-	 * Get list of lock files in /tmp
-	 * @returns List of lock file paths
+	 * Launch Xvfb with -displayfd 3 so the kernel/Xvfb itself picks a free
+	 * display number atomically and reports it back to us. Avoids userspace race conditions
 	 */
-	public static _get_lock_files(): string[] {
-		const tmpd = process.env.TMPDIR || tmpdir();
-		try {
-			return globSync(path.join(tmpd, ".X*-lock")).filter((p) => {
-				try {
-					return statSync(p).isFile();
-				} catch {
-					return false;
-				}
-			});
-		} catch {
-			return [];
+	private spawnXvfb(): ChildProcess {
+		const xvfbPath = this.xvfb_path;
+		const cmd = [xvfbPath, "-displayfd", "3", ...this.xvfb_args];
+		if (this.debug) {
+			console.log("Starting virtual display:", cmd.join(" "));
 		}
+		// Force Mesa software GLX to avoid GPU contention delays, we don't use the GPU anyways
+		return spawn(cmd[0], cmd.slice(1), {
+			stdio: [
+				"ignore",
+				this.debug ? "inherit" : "ignore",
+				this.debug ? "inherit" : "ignore",
+				"pipe", // fd 3 — Xvfb writes "<display>\n" here
+			],
+			detached: true,
+			env: {
+				...process.env,
+				__GLX_VENDOR_LIBRARY_NAME: "mesa",
+				LIBGL_ALWAYS_SOFTWARE: "1",
+			},
+		});
 	}
 
-	private static _free_display(): number {
-		const ls = VirtualDisplay._get_lock_files().map((x) =>
-			parseInt(x.split("X")[1].split("-")[0], 10),
-		);
-		return ls.length ? Math.max(99, Math.max(...ls) + randomInt(3, 20)) : 99;
+	public async get(): Promise<string> {
+		VirtualDisplay.assert_linux();
+
+		if (!this.proc) {
+			this.proc = this.spawnXvfb();
+			// Xvfb writes "<display>\n" to fd 3 and closes it. If Xvfb
+			// fails to bind anywhere, it exits without writing, so the
+			// pipe ends without yielding chunks and the parseInt below
+			// throws — which is what we want.
+			let buf = "";
+			for await (const chunk of this.proc.stdio[3] as Readable) {
+				buf += chunk;
+				if (buf.includes("\n")) break;
+			}
+			const n = Number.parseInt(buf, 10);
+			if (!Number.isFinite(n)) {
+				this.kill();
+				throw new CannotExecuteXvfb(
+					`Xvfb did not report a display (got ${JSON.stringify(buf)})`,
+				);
+			}
+			this._display = n;
+		} else if (this.debug) {
+			console.log(`Using virtual display: ${this._display}`);
+		}
+
+		return `:${this._display}`;
 	}
 
-	private get display(): number {
-		if (this._display === null) {
-			this._display = VirtualDisplay._free_display();
+	public kill(): void {
+		if (this.proc && this.proc.exitCode === null && !this.proc.killed) {
+			if (this.debug) {
+				console.log("Terminating virtual display:", this._display);
+			}
+			this.proc.kill();
 		}
-		return this._display;
 	}
 
 	private static assert_linux(): void {
