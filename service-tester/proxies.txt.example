@@ -1,0 +1,13 @@
+# camoufox-js service-tester proxy list.
+#
+# Format: one proxy per line: user:pass@domain:port
+# Blank lines and lines starting with '#' are ignored.
+# Proxies are assigned round-robin to the 6 test profiles; fewer is fine.
+#
+# Copy this file to proxies.txt and fill in real values:
+#   cp proxies.txt.example proxies.txt
+#
+# Example:
+# alice:secret123@proxy1.example.com:10000
+# bob:hunter2@proxy2.example.com:10000
+# alice:secret123@proxy1.example.com:10001
