@@ -5,7 +5,10 @@
 	"types": "dist/index.d.ts",
 	"scripts": {
 		"build": "rimraf dist && tsc && pnpm copy-files",
-		"test": "vitest",
+		"test": "bash tests-camoufox-js/run-tests.sh",
+		"test:camoufox-only": "bash tests-camoufox-js/run-tests.sh --camoufox-only",
+		"test:upstream-only": "bash tests-camoufox-js/run-tests.sh --upstream-only",
+		"test:vitest": "vitest --config tests-camoufox-js/vitest.config.ts",
 		"copy-files": "cp -r src/data-files dist/data-files",
 		"check": "biome check",
 		"preinstall": "npx only-allow pnpm"

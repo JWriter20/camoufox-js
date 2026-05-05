@@ -4,3 +4,4 @@ yarn.lock
 scripts/
 *.mmdb
 dist/
+tests-camoufox-js/.upstream-cache/
