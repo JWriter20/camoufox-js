@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { getAsBooleanFromENV } from "../src/utils";
 
 describe("getAsBooleanFromENV", () => {

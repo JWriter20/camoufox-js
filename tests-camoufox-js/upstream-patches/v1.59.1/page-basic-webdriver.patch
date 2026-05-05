@@ -1,0 +1,26 @@
+Stealth-by-design override: navigator.webdriver must be false under Camoufox.
+
+Stock Firefox under Playwright sets navigator.webdriver=true; Camoufox's
+whole purpose is to spoof it to false. Upstream's "has navigator.webdriver
+set to true" pins the stock-firefox expectation, so we rewrite the title +
+assertion to match Camoufox's surface. Applied unconditionally by setup.sh
+after each upstream clone — this turns what would otherwise be a
+known-failures deselect into a real green assertion.
+
+If a future upstream release moves the test, edit this patch and bump the
+v<TAG>/ directory accordingly. Diff is anchored on the test title so it
+survives small surrounding-line drift.
+
+--- a/tests/page/page-basic.spec.ts
++++ b/tests/page/page-basic.spec.ts
+@@ -180,8 +180,8 @@
+   expect(await frame.evaluate(() => document.querySelector('textarea').value)).toBe('a');
+ });
+
+-it('has navigator.webdriver set to true', async ({ page }) => {
+-  expect(await page.evaluate(() => navigator.webdriver)).toBe(true);
++it('has navigator.webdriver set to false (camoufox stealth)', async ({ page }) => {
++  expect(await page.evaluate(() => navigator.webdriver)).toBe(false);
+ });
+
+ it('should iterate over page properties', async ({ page }) => {

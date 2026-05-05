@@ -6,7 +6,12 @@
 		"useIgnoreFile": false
 	},
 	"files": {
-		"ignoreUnknown": false
+		"ignoreUnknown": false,
+		"includes": [
+			"src/**/*.ts",
+			"tests-camoufox-js/*.ts",
+			"!tests-camoufox-js/.upstream-cache"
+		]
 	},
 	"formatter": {
 		"enabled": true,
@@ -14,7 +19,7 @@
 	},
 	"linter": {
 		"enabled": true,
-		"includes": ["src/**/*.ts", "tests/**/*.ts"],
+		"includes": ["src/**/*.ts", "tests-camoufox-js/*.ts"],
 		"rules": {
 			"recommended": true,
 			"suspicious": {

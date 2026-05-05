@@ -1,0 +1,25 @@
+# Tests deselected when running upstream microsoft/playwright@v1.59.1
+# against Camoufox via camoufox-js. Format: one literal test-title fragment
+# per line, # for comments. Each line is regex-escaped and OR'd into a
+# single --grep-invert pattern.
+#
+# Each line should explain WHY the test is deselected. As fixes land,
+# remove lines from this file rather than amending them.
+#
+# Categories (mirroring the python harness):
+#   [bug-c++]       Real Camoufox regression that needs a C++ patch + rebuild.
+#   [bug-juggler]   Real Camoufox regression that may be fixable in Juggler JS.
+#   [hang]          Hangs the runner; revisit as part of harness iteration.
+#   [flaky]         Passes serially, fails under parallel workers.
+#   [unsupported]   Camoufox-specific stealth behaviour deliberately diverges
+#                   from upstream's expectation (test pins stock Firefox shape).
+#
+# When seeding this file for a new upstream tag, run the suite once with no
+# entries here, triage failures, then add lines for ones we want to skip.
+# The python harness's known-failures-v<TAG>.txt is a useful starting point —
+# many of those tests fail in the JS port for the same reasons.
+#
+# Tests that we *patch* upstream rather than deselect live in
+# upstream-patches/v<TAG>/. Prefer patching over deselecting whenever
+# Camoufox's behavior is correct and the upstream assertion is the wrong
+# expectation for our stealth surface (e.g. navigator.webdriver=false).
