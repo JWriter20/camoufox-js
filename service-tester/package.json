@@ -1,0 +1,25 @@
+{
+	"name": "@camoufox-js/service-tester",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"description": "End-to-end stealth-evaluation harness for camoufox-js. Mirrors camoufox/service-tester (Python) — same checks bundle, same grading, same certificate format.",
+	"main": "dist/run_tests.js",
+	"bin": {
+		"camoufox-js-service-tester": "dist/run_tests.js"
+	},
+	"scripts": {
+		"build": "rimraf dist && tsc && cp src/test_page_template.html dist/test_page_template.html",
+		"test": "node dist/run_tests.js"
+	},
+	"dependencies": {
+		"esbuild": "^0.24.2",
+		"impit": "^0.13.0",
+		"playwright-core": "*"
+	},
+	"devDependencies": {
+		"@types/node": "^24.0.0",
+		"rimraf": "^6.0.1",
+		"typescript": "^5.8.3"
+	}
+}

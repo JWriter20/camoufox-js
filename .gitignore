@@ -5,3 +5,6 @@ scripts/
 *.mmdb
 dist/
 tests-camoufox-js/.upstream-cache/
+service-tester/dist/
+service-tester/node_modules/
+service-tester/proxies.txt
