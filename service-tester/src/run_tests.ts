@@ -65,7 +65,7 @@ function parseCliArgs(argv: string[]): CliOptions {
 	const { values } = parseArgs({
 		args: argv,
 		options: {
-			"profile-count": { type: "string", default: "6" },
+			"profile-count": { type: "string", default: "9" },
 			headful: { type: "boolean", default: false },
 			proxies: { type: "string", default: PROXIES_FILE },
 			secret: { type: "string", default: "camoufox-service-test" },
@@ -79,7 +79,7 @@ function parseCliArgs(argv: string[]): CliOptions {
 	if (values.help) {
 		console.log(`Usage: run_tests [options]
 
-  --profile-count N       Number of profiles to test (1-6, default: 6)
+  --profile-count N       Number of profiles to test (1-9, default: 9)
   --headful               Run with visible browser window
   --proxies PATH          Path to proxies file (default: proxies.txt next to this script)
                           Format: user:pass@domain:port (one per line)
@@ -133,6 +133,107 @@ async function runOneProfile(
 		const browser = await Camoufox(launchOpts);
 		try {
 			const page = await browser.newPage();
+
+			// Pre-check WebRTC on a real URL via the proxy. The bundle's
+			// inline WebRTC check runs on http://127.0.0.1:<port>/, which
+			// Firefox's localhost-bypass excludes from the configured proxy
+			// — so `media.peerconnection.ice.proxy_only_if_behind_proxy`
+			// can't engage and the host's real IP shows up in ICE
+			// candidates, even though real-world (proxied) navigation is
+			// clean. Run the WebRTC probe on a plain external page first,
+			// capture its result, then overwrite `results.webrtc` after
+			// the bundle finishes so the certificate reflects real-world
+			// behavior instead of the localhost artifact.
+			let realWorldWebRTC: Record<string, any> | null = null;
+			try {
+				await page.goto("https://example.com/", {
+					waitUntil: "domcontentloaded",
+					timeout: 30_000,
+				});
+				realWorldWebRTC = (await page.evaluate(async () => {
+					const result: Record<string, any> = {
+						passed: true,
+						iceIPs: [] as string[],
+						sdpSanitized: true,
+						getStatsClean: true,
+						candidateCount: 0,
+						detail: "",
+					};
+					if (typeof RTCPeerConnection === "undefined") {
+						result.detail = "RTCPeerConnection not available";
+						return result;
+					}
+					const pc = new RTCPeerConnection({
+						iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+					});
+					const ips = new Set<string>();
+					const done = new Promise<void>((resolve) => {
+						const t = setTimeout(resolve, 8000);
+						pc.onicecandidate = (e) => {
+							if (!e.candidate) {
+								clearTimeout(t);
+								resolve();
+								return;
+							}
+							result.candidateCount++;
+							const m = e.candidate.candidate.match(
+								/(?:\d{1,3}\.){3}\d{1,3}|[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){7}/,
+							);
+							if (m) ips.add(m[0]);
+							if ((e.candidate as any).address)
+								ips.add((e.candidate as any).address);
+						};
+					});
+					pc.createDataChannel("test");
+					await pc.setLocalDescription(await pc.createOffer());
+					const sdp = pc.localDescription?.sdp || "";
+					const privateRe =
+						/(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})/;
+					if (privateRe.test(sdp)) result.sdpSanitized = false;
+					await done;
+					try {
+						const stats = await pc.getStats();
+						stats.forEach((r: any) => {
+							if (
+								r.type === "local-candidate" ||
+								r.type === "remote-candidate"
+							) {
+								if (r.address) ips.add(r.address);
+								if (r.ip) ips.add(r.ip);
+							}
+						});
+					} catch {}
+					pc.close();
+					result.iceIPs = Array.from(ips);
+					const hasPrivate = result.iceIPs.some((ip: string) =>
+						privateRe.test(ip),
+					);
+					if (hasPrivate) {
+						result.passed = false;
+						result.detail =
+							"Private IP leaked in ICE candidates: " +
+							result.iceIPs.join(", ");
+					} else if (!result.sdpSanitized) {
+						result.passed = false;
+						result.detail = "Private IP found in SDP";
+					} else if (result.iceIPs.length === 0) {
+						result.detail =
+							"WebRTC clean - 0 candidates (proxy-only mode active)";
+					} else {
+						result.detail =
+							"WebRTC clean - " +
+							result.candidateCount +
+							" candidates, no private IP leaks";
+					}
+					return result;
+				})) as Record<string, any>;
+			} catch (e) {
+				// If the pre-check fails (proxy down, DNS issue), fall back
+				// to the bundle's localhost result rather than aborting the
+				// whole profile — the rest of the checks are still useful.
+				realWorldWebRTC = null;
+			}
+
 			await page.goto(testPageUrl, {
 				waitUntil: "domcontentloaded",
 				timeout: 30_000,
@@ -154,6 +255,9 @@ async function runOneProfile(
 			const results = (await page.evaluate(
 				() => (window as any).__testResults__,
 			)) as Record<string, any>;
+			if (realWorldWebRTC) {
+				results.webrtc = realWorldWebRTC;
+			}
 			adjustCrossOsFontChecks(spec.os, results);
 			const [passCount, totalChecks] = countAllChecks(results);
 			const grade = computeGrade(passCount, totalChecks);
@@ -183,7 +287,10 @@ async function main(): Promise<number> {
 	const proxies = loadProxies(opts.proxies);
 	console.log(`Loaded ${proxies.length} proxy/proxies from ${path.basename(opts.proxies)}`);
 
-	// 3. Build profile specs (mac × 3, linux × 3, capped to profile-count).
+	// 3. Build profile specs (mac × 3, linux × 3, windows × 3 capped).
+	// Windows fonts (Segoe UI, Tahoma, Cambria Math, Nirmala UI, ...) are
+	// the third axis CreepJS and reCAPTCHA Enterprise key off, so include
+	// them in the default profile mix — not just mac/linux.
 	const allSpecs: ProfileSpec[] = [];
 	for (let i = 0; i < 3; i++) {
 		allSpecs.push({
@@ -195,6 +302,12 @@ async function main(): Promise<number> {
 		allSpecs.push({
 			os: "linux",
 			name: `Linux Per-Context ${String.fromCharCode(65 + i)}`,
+		});
+	}
+	for (let i = 0; i < 3; i++) {
+		allSpecs.push({
+			os: "windows",
+			name: `Windows Per-Context ${String.fromCharCode(65 + i)}`,
 		});
 	}
 	const entries = allSpecs.slice(0, Math.max(1, Math.min(opts.profileCount, allSpecs.length)));
