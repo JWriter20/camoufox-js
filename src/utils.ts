@@ -30,8 +30,8 @@ import { publicIP, validIPv4, validIPv6 } from "./ip.js";
 import { geoipAllowed, getGeolocation, handleLocales } from "./locale.js";
 import FONTS from "./mappings/fonts.config.js";
 import { getPath, installedVerStr, launchPath, OS_NAME } from "./pkgman.js";
-import { generateVoiceSubset } from "./voices.js";
 import type { VirtualDisplay } from "./virtdisplay.js";
+import { generateVoiceSubset } from "./voices.js";
 import { LeakWarning } from "./warnings.js";
 import { sampleWebGL } from "./webgl/sample.js";
 
@@ -655,8 +655,7 @@ export async function launchOptions({
 		const aw = config["screen.availWidth"] as number | undefined;
 		const ah = config["screen.availHeight"] as number | undefined;
 		if (sw && sh && aw === sw && ah === sh) {
-			const taskbar =
-				targetOS === "win" ? 40 : targetOS === "mac" ? 25 : 27;
+			const taskbar = targetOS === "win" ? 40 : targetOS === "mac" ? 25 : 27;
 			const newAvail = sh - taskbar;
 			config["screen.availHeight"] = newAvail;
 			const oh = config["window.outerHeight"] as number | undefined;
@@ -705,11 +704,7 @@ export async function launchOptions({
 	// and time samples — a strong "this is the same machine pretending to be
 	// different OSes" tell on CreepJS's Audio section. Randomize per launch
 	// so each spoofed identity gets a unique but stable audio profile.
-	setInto(
-		config,
-		"audio:seed",
-		Math.floor(Math.random() * 1_073_741_824),
-	);
+	setInto(config, "audio:seed", Math.floor(Math.random() * 1_073_741_824));
 
 	// Handle proxy
 	const proxyUrl = getProxyUrl(proxy);

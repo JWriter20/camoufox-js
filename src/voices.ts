@@ -43,7 +43,11 @@ const ESSENTIAL_MAC = new Set([
 // macOS NSSpeechSynthesizer -> "urn:moz-tts:osx:<identifier>"
 // Windows SAPI -> "urn:moz-tts:sapi:<token>"
 // Linux speech-dispatcher -> "urn:moz-tts:speechd:<index>"
-const URI_PREFIX = { mac: "urn:moz-tts:osx:", win: "urn:moz-tts:sapi:", lin: "urn:moz-tts:speechd:" } as const;
+const URI_PREFIX = {
+	mac: "urn:moz-tts:osx:",
+	win: "urn:moz-tts:sapi:",
+	lin: "urn:moz-tts:speechd:",
+} as const;
 
 function uriSlug(name: string): string {
 	// Real Apple identifiers look like "com.apple.voice.compact.en-US.Samantha".
@@ -150,7 +154,8 @@ export function generateVoiceSubset(os: string, locale?: string): Voice[] {
 		);
 	}
 	if (idx < 0) idx = 0;
-	if (selected.length > 0) selected[idx] = { ...selected[idx], isDefault: true };
+	if (selected.length > 0)
+		selected[idx] = { ...selected[idx], isDefault: true };
 
 	return selected;
 }
