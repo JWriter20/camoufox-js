@@ -30,6 +30,7 @@ import { publicIP, validIPv4, validIPv6 } from "./ip.js";
 import { geoipAllowed, getGeolocation, handleLocales } from "./locale.js";
 import FONTS from "./mappings/fonts.config.js";
 import { getPath, installedVerStr, launchPath, OS_NAME } from "./pkgman.js";
+import { generateVoiceSubset } from "./voices.js";
 import type { VirtualDisplay } from "./virtdisplay.js";
 import { LeakWarning } from "./warnings.js";
 import { sampleWebGL } from "./webgl/sample.js";
@@ -685,6 +686,35 @@ export async function launchOptions({
 	// Set locale
 	if (locale) {
 		handleLocales(locale, config);
+	}
+
+	// Per-OS speech voice list. Without this, Firefox registers the host's
+	// speech-dispatcher / SAPI / NSSpeech voices into navigator.speechSynthesis.
+	// On a Linux host that's the eSpeak catalog (~13k entries) — a glaring
+	// "Linux underneath" signal in any spoofed Mac/Windows context. The
+	// camoufox C++ patch (voice-spoofing.patch) provides MVoices() for an
+	// override list and `voices:blockIfNotDefined` to suppress the native
+	// registration; we feed both here. User-supplied `config.voices` wins.
+	//
+	// Runs AFTER locale handling so the default-voice picker can match the
+	// spoofed locale prefix and avoid CreepJS's voiceLangMismatch flag.
+	//
+	// Linux target intentionally falls through: production camoufox runs on
+	// a Linux host, so the native speech-dispatcher voices ARE the authentic
+	// fingerprint. Synthesizing a "Linux-like" list would diverge from
+	// whatever espeak-ng version the host is running and look wrong. Better
+	// to let the native registration win.
+	if (targetOS !== "lin" && !isDomainSet(config, "voices")) {
+		const lang = config["locale:language"] as string | undefined;
+		const region = config["locale:region"] as string | undefined;
+		const localeStr = lang && region ? `${lang}-${region}` : lang;
+		const voices = generateVoiceSubset(targetOS, localeStr);
+		setInto(config, "voices", voices);
+		setInto(config, "voices:blockIfNotDefined", true);
+		// Fake speak/end events so apps that test speechSynthesis.speak() flow
+		// don't hang on our synthetic voices. 12.5 cps ≈ 150 wpm, the patch's
+		// natural default.
+		setInto(config, "voices:fakeCompletion", true);
 	}
 
 	// Pass the humanize option
