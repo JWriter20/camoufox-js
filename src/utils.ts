@@ -119,10 +119,7 @@ interface Property {
 }
 
 function loadProperties(filePath?: PathLike): Record<string, string> {
-	const propFile = bundleResourcePath(
-		"properties.json",
-		filePath?.toString(),
-	);
+	const propFile = bundleResourcePath("properties.json", filePath?.toString());
 	const propData = readFileSync(propFile).toString();
 	const propDict: Property[] = JSON.parse(propData);
 
