@@ -98,7 +98,17 @@ function loadProperties(filePath?: PathLike): Record<string, string> {
 	let propFile: string;
 	filePath = filePath?.toString();
 	if (filePath) {
-		propFile = path.join(path.dirname(filePath), "properties.json");
+		const dir = path.dirname(filePath);
+		// On macOS, the bundle layout puts the executable in
+		// Camoufox.app/Contents/MacOS/ but resource files (properties.json,
+		// fontconfig/, etc.) live in ../Resources/. Detect that and resolve
+		// up one level. Keeps camoufox-js bundle-layout-aware so the build
+		// side (scripts/package.py) doesn't need a symlink workaround.
+		if (path.basename(dir) === "MacOS") {
+			propFile = path.join(dir, "..", "Resources", "properties.json");
+		} else {
+			propFile = path.join(dir, "properties.json");
+		}
 	} else {
 		propFile = getPath("properties.json");
 	}
