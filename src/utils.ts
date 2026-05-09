@@ -46,7 +46,28 @@ const CACHE_PREFS = {
 	"browser.cache.disk.smart_size.enabled": true,
 };
 
-function getEnvVars(configMap: ConfigMap, userAgentOS: string): EnvVars {
+function bundleResourcePath(file: string, executablePath?: string): string {
+	// Resolve a bundle resource (fontconfig/, properties.json, etc.) relative
+	// to the executable the caller actually launched, when one is provided.
+	// Mirrors getPath() but honors executable_path so a sandbox/alt-version
+	// build doesn't fall back to ~/.cache/camoufox/. Mac-bundle aware: when
+	// the executable lives in Camoufox.app/Contents/MacOS/, resources live
+	// in ../Resources/.
+	if (!executablePath) {
+		return getPath(file);
+	}
+	const dir = path.dirname(executablePath);
+	if (path.basename(dir) === "MacOS") {
+		return path.join(dir, "..", "Resources", file);
+	}
+	return path.join(dir, file);
+}
+
+function getEnvVars(
+	configMap: ConfigMap,
+	userAgentOS: string,
+	executablePath?: string,
+): EnvVars {
 	const envVars: EnvVars = {};
 	let updatedConfigData: Uint8Array;
 
@@ -72,7 +93,10 @@ function getEnvVars(configMap: ConfigMap, userAgentOS: string): EnvVars {
 	}
 
 	if (OS_NAME === "lin") {
-		const fontconfigPath = getPath(path.join("fontconfig", userAgentOS));
+		const fontconfigPath = bundleResourcePath(
+			path.join("fontconfig", userAgentOS),
+			executablePath,
+		);
 		envVars.FONTCONFIG_PATH = fontconfigPath;
 	}
 
@@ -95,24 +119,10 @@ interface Property {
 }
 
 function loadProperties(filePath?: PathLike): Record<string, string> {
-	let propFile: string;
-	filePath = filePath?.toString();
-	if (filePath) {
-		const dir = path.dirname(filePath);
-		// On macOS, the bundle layout puts the executable in
-		// Camoufox.app/Contents/MacOS/ but resource files (properties.json,
-		// fontconfig/, etc.) live in ../Resources/. Detect that and resolve
-		// up one level. Keeps camoufox-js bundle-layout-aware so the build
-		// side (scripts/package.py) doesn't need a symlink workaround.
-		if (path.basename(dir) === "MacOS") {
-			propFile = path.join(dir, "..", "Resources", "properties.json");
-		} else {
-			propFile = path.join(dir, "properties.json");
-		}
-	} else {
-		propFile = getPath("properties.json");
-	}
-
+	const propFile = bundleResourcePath(
+		"properties.json",
+		filePath?.toString(),
+	);
 	const propData = readFileSync(propFile).toString();
 	const propDict: Property[] = JSON.parse(propData);
 
@@ -881,7 +891,7 @@ export async function launchOptions({
 
 	//Prepare environment variables to pass to Camoufox
 	const env_vars = {
-		...getEnvVars(config, targetOS),
+		...getEnvVars(config, targetOS, executable_path?.toString()),
 		...env,
 	};
 
