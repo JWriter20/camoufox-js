@@ -106,7 +106,7 @@ export class VirtualDisplay {
 			env: {
 				...process.env,
 				__GLX_VENDOR_LIBRARY_NAME: "mesa",
-				LIBGL_ALWAYS_SOFTWARE: "1"
+				LIBGL_ALWAYS_SOFTWARE: "1",
 			},
 		});
 	}
