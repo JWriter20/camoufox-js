@@ -129,6 +129,14 @@ async function runOneProfile(
 			geoip: true,
 		};
 		if (ffVersion) launchOpts.ff_version = ffVersion;
+		// Allow pointing the harness at a sandbox/alt-version build without
+		// touching the production ~/.cache/camoufox-v* path. Set
+		// CAMOUFOX_EXECUTABLE_PATH to the binary to test (e.g. a v150 build
+		// in stealth-browsers/camoufox-cache/).
+		if (process.env.CAMOUFOX_EXECUTABLE_PATH) {
+			launchOpts.executable_path = process.env.CAMOUFOX_EXECUTABLE_PATH;
+			launchOpts.i_know_what_im_doing = true;
+		}
 
 		const browser = await Camoufox(launchOpts);
 		try {
