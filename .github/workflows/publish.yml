@@ -88,8 +88,10 @@ jobs:
             - name: Upgrade npm for trusted publishing
               run: npm install -g npm@latest
 
-            - name: Publish to npm (trusted publishing + provenance)
-              run: npm publish --access restricted --provenance
+            # No --provenance: npm rejects provenance for restricted
+            # (private) packages. OIDC trusted publishing still applies.
+            - name: Publish to npm (trusted publishing)
+              run: npm publish --access restricted
 
             - name: Summary
               run: |
