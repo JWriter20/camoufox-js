@@ -1,0 +1,96 @@
+name: Publish to npm
+
+# Auto-publishes @jobharvest/camoufox-js on every push to master.
+#
+# Flow: build + check  ->  auto patch-bump  ->  commit the bump back to
+# master ([skip ci] so it doesn't re-trigger)  ->  npm publish.
+#
+# Auth is npm trusted publishing (OIDC) — no NPM_TOKEN secret. Configure
+# @jobharvest/camoufox-js on npmjs.com to trust this repo + workflow
+# (.github/workflows/publish.yml) as a trusted publisher. The default
+# GITHUB_TOKEN is used to push the version-bump commit back to master.
+#
+# To release WITHOUT auto-bumping (e.g. you already set the version in
+# your own commit), include "[skip bump]" in the commit message — the
+# workflow will publish package.json as-is and skip the bump+commit.
+
+on:
+    push:
+        branches:
+            - master
+
+# Prevent overlapping publishes from racing the version bump.
+concurrency:
+    group: publish-npm
+    cancel-in-progress: false
+
+permissions:
+    contents: write # push the version-bump commit back to master
+    id-token: write # OIDC for npm trusted publishing + provenance
+
+jobs:
+    publish:
+        # Never run on the bot's own version-bump commit.
+        if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+        name: Build, bump & publish
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout master
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Set up pnpm
+              uses: pnpm/action-setup@v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  registry-url: https://registry.npmjs.org
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Check formatting + linting
+              run: pnpm check
+
+            - name: Build
+              run: pnpm build
+
+            - name: Auto patch-bump version
+              id: bump
+              if: ${{ !contains(github.event.head_commit.message, '[skip bump]') }}
+              run: |
+                  git config user.name  "camoufox-js release bot"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  NEW_VERSION="$(npm version patch --no-git-tag-version)"
+                  echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+                  git commit -am "chore(release): ${NEW_VERSION} [skip ci]"
+                  git push origin HEAD:master
+
+            - name: Resolve version to publish
+              id: version
+              run: echo "version=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+            - name: Abort if this version is already on npm
+              run: |
+                  NAME="$(node -p "require('./package.json').name")"
+                  VER="$(node -p "require('./package.json').version")"
+                  if npm view "${NAME}@${VER}" version >/dev/null 2>&1; then
+                      echo "::error::${NAME}@${VER} is already published — bump the version or use [skip bump] with a fresh one."
+                      exit 1
+                  fi
+
+            # Trusted publishing (OIDC) needs npm >= 11.5.1.
+            - name: Upgrade npm for trusted publishing
+              run: npm install -g npm@latest
+
+            - name: Publish to npm (trusted publishing + provenance)
+              run: npm publish --access restricted --provenance
+
+            - name: Summary
+              run: |
+                  echo "### Published \`$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")\`" >> "$GITHUB_STEP_SUMMARY"
