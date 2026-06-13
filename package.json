@@ -22,7 +22,7 @@
 	"author": "",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/apify/camoufox-js"
+		"url": "git+https://github.com/JWriter20/camoufox-js.git"
 	},
 	"bugs": {
 		"url": "https://github.com/apify/camoufox-js/issues"
