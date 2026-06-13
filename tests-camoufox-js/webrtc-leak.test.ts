@@ -28,7 +28,11 @@ const EXEC_PATH =
 	process.env.CAMOUFOX_EXECUTABLE_PATH || process.env.FFPATH || "";
 
 interface GatherResult {
-	candidates: { candidate: string; address: string | null; type: string | null }[];
+	candidates: {
+		candidate: string;
+		address: string | null;
+		type: string | null;
+	}[];
 	sdp: string;
 	error: string | null;
 }
@@ -91,58 +95,54 @@ async function realPublicIP(): Promise<string | null> {
 }
 
 describe.skipIf(!EXEC_PATH)("WebRTC IP spoof", () => {
-	test(
-		"srflx ICE candidate shows the spoofed IP, never the real public IP",
-		async () => {
-			const realIP = await realPublicIP();
+	test("srflx ICE candidate shows the spoofed IP, never the real public IP", async () => {
+		const realIP = await realPublicIP();
 
-			const browser = await Camoufox({
-				executable_path: EXEC_PATH,
-				headless: true,
-				// Drive the spoof directly via config, bypassing the geoip/proxy
-				// path so the test is hermetic. This is exactly the key utils.ts
-				// sets from geoip.
-				config: { "webrtc:ipv4": SENTINEL_IP },
+		const browser = await Camoufox({
+			executable_path: EXEC_PATH,
+			headless: true,
+			// Drive the spoof directly via config, bypassing the geoip/proxy
+			// path so the test is hermetic. This is exactly the key utils.ts
+			// sets from geoip.
+			config: { "webrtc:ipv4": SENTINEL_IP },
+		});
+
+		try {
+			const page = await browser.newPage();
+			await page.goto("https://example.com/", {
+				waitUntil: "domcontentloaded",
 			});
+			const result = await page.evaluate(gatherIce, STUN);
 
-			try {
-				const page = await browser.newPage();
-				await page.goto("https://example.com/", {
-					waitUntil: "domcontentloaded",
-				});
-				const result = await page.evaluate(gatherIce, STUN);
+			const srflx = result.candidates.filter((c) => c.type === "srflx");
 
-				const srflx = result.candidates.filter((c) => c.type === "srflx");
-
-				// If no srflx candidate gathered, UDP STUN is blocked in this
-				// environment — the test can't prove anything, so skip rather
-				// than fail. (Locally, with UDP egress, srflx always forms.)
-				if (srflx.length === 0) {
-					console.warn(
-						"[webrtc-leak] no srflx candidate gathered (UDP STUN blocked?) — skipping assertions",
-					);
-					return;
-				}
-
-				const allText =
-					result.candidates.map((c) => c.candidate).join("\n") +
-					"\n" +
-					result.sdp;
-
-				// Real public IP must never appear in any candidate or the SDP.
-				if (realIP) {
-					expect(ipv4sIn(allText)).not.toContain(realIP);
-				}
-
-				// Every srflx candidate's address must be the sentinel.
-				const srflxAddrs = [
-					...new Set(srflx.map((c) => c.address).filter(Boolean)),
-				];
-				expect(srflxAddrs).toEqual([SENTINEL_IP]);
-			} finally {
-				await browser.close();
+			// If no srflx candidate gathered, UDP STUN is blocked in this
+			// environment — the test can't prove anything, so skip rather
+			// than fail. (Locally, with UDP egress, srflx always forms.)
+			if (srflx.length === 0) {
+				console.warn(
+					"[webrtc-leak] no srflx candidate gathered (UDP STUN blocked?) — skipping assertions",
+				);
+				return;
 			}
-		},
-		30e3,
-	);
+
+			const allText =
+				result.candidates.map((c) => c.candidate).join("\n") +
+				"\n" +
+				result.sdp;
+
+			// Real public IP must never appear in any candidate or the SDP.
+			if (realIP) {
+				expect(ipv4sIn(allText)).not.toContain(realIP);
+			}
+
+			// Every srflx candidate's address must be the sentinel.
+			const srflxAddrs = [
+				...new Set(srflx.map((c) => c.address).filter(Boolean)),
+			];
+			expect(srflxAddrs).toEqual([SENTINEL_IP]);
+		} finally {
+			await browser.close();
+		}
+	}, 30e3);
 });
