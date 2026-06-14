@@ -648,6 +648,14 @@ export async function launchOptions({
 		Math.floor(Math.random() * 1_073_741_824),
 	);
 
+	// Per-launch audio fingerprint seed. Without this the C++
+	// AudioFingerprintManager defaults to seed=0, which means every spoofed
+	// context (mac/win/lin) returns the SAME AudioBuffer sums, gains, freqs,
+	// and time samples — a strong "this is the same machine pretending to be
+	// different OSes" tell on CreepJS's Audio section. Randomize per launch
+	// so each spoofed identity gets a unique but stable audio profile.
+	setInto(config, "audio:seed", Math.floor(Math.random() * 1_073_741_824));
+
 	// Handle proxy
 	const proxyUrl = getProxyUrl(proxy);
 
