@@ -1,11 +1,14 @@
 {
-	"name": "camoufox-js",
-	"version": "0.11.0",
+	"name": "@jobharvest/camoufox-js",
+	"version": "0.11.12",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"scripts": {
 		"build": "rimraf dist && tsc && pnpm copy-files",
-		"test": "vitest",
+		"test": "bash tests-camoufox-js/run-tests.sh",
+		"test:camoufox-only": "bash tests-camoufox-js/run-tests.sh --camoufox-only",
+		"test:upstream-only": "bash tests-camoufox-js/run-tests.sh --upstream-only",
+		"test:vitest": "vitest --config tests-camoufox-js/vitest.config.ts",
 		"copy-files": "cp -r src/data-files dist/data-files",
 		"check": "biome check"
 	},
@@ -18,7 +21,7 @@
 	"author": "",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/apify/camoufox-js"
+		"url": "git+https://github.com/JWriter20/camoufox-js.git"
 	},
 	"bugs": {
 		"url": "https://github.com/apify/camoufox-js/issues"

@@ -42,9 +42,9 @@ function procOf(vd: VirtualDisplay) {
 	).proc;
 }
 
-// kill() sends SIGKILL, so a terminated Xvfb reports exitCode === null
-// and signalCode === "SIGKILL"; one that exited normally reports the
-// reverse. Either non-null value proves the process is gone.
+// A process that died by signal (our kill() sends SIGKILL) reports
+// exitCode === null but signalCode !== null, while one that exited
+// normally reports the reverse. Either proves termination.
 function hasExited(vd: VirtualDisplay): boolean {
 	const p = procOf(vd);
 	return p.exitCode !== null || p.signalCode !== null;
@@ -85,11 +85,11 @@ describe.skipIf(process.platform !== "linux")("VirtualDisplay", () => {
 	test(
 		`${N} concurrent reservations all get unique displays`,
 		async () => {
-			// Every VirtualDisplay spawns its own Xvfb on a randomly chosen
-			// display number and confirms it won the /tmp/.X{N}-lock race
-			// (kernel-mediated O_CREAT|O_EXCL, no userspace race), retrying
-			// on collision. A duplicate here would mean two Xvfbs somehow
-			// believed they owned the same display number.
+			// Every VirtualDisplay spawns its own Xvfb on a random display
+			// number drawn from a large sparse range, then confirms it won
+			// the /tmp/.X{N}-lock O_CREAT|O_EXCL race before returning. A
+			// duplicate here would mean two VirtualDisplays accepted the same
+			// number despite the lock-race guard.
 			const vds = Array.from({ length: N }, () => track(new VirtualDisplay()));
 
 			const displays = await Promise.all(vds.map((vd) => vd.get()));

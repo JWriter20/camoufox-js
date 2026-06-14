@@ -202,7 +202,12 @@ export class CamoufoxFetcher extends GitHubDownloader {
 	_url?: string;
 
 	constructor() {
-		super("daijro/camoufox");
+		// Fork: install from JWriter20/camoufox, which ships the WebRTC IP
+		// leak fix, the system-ui font spoof, and the flattened-fonts bundle
+		// layout that the camoufox-js launcher expects (gfx.bundled-fonts
+		// .activate=1 only sees fonts/ at the top level — not OS subfolders).
+		// Override via $CAMOUFOX_REPO if you need a different fork.
+		super(process.env.CAMOUFOX_REPO || "JWriter20/camoufox");
 		this.arch = CamoufoxFetcher.getPlatformArch();
 		this.pattern = new RegExp(
 			`camoufox-(.+)-(.+)-${OS_NAME}\\.${this.arch}\\.zip`,

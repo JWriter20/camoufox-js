@@ -1,0 +1,26 @@
+{
+	"compilerOptions": {
+		"target": "es2022",
+		"module": "es2022",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"resolveJsonModule": true,
+		"declaration": false,
+		"sourceMap": false,
+		"outDir": "dist",
+		"rootDir": "src",
+		"allowImportingTsExtensions": false,
+		"verbatimModuleSyntax": false
+	},
+	"include": [
+		"src/run_tests.ts",
+		"src/bundle.ts",
+		"src/certificate.ts",
+		"src/constants.ts",
+		"src/grading.ts",
+		"src/proxies.ts"
+	],
+	"exclude": ["src/checks/**", "src/types.ts", "node_modules", "dist"]
+}
