@@ -302,6 +302,19 @@ describe.skipIf(!EXEC_PATH)("WebRTC n/a behind a TCP proxy", () => {
 			// Drive the spoof directly via config — exactly what the geoip
 			// path sets from the proxy IP in production (utils.ts).
 			config: { "webrtc:ipv4": SENTINEL_IP },
+			// Force proxy-only ICE so NO real srflx can ever form, even on a
+			// host with open UDP egress. The blackhole STUN URL alone is not
+			// enough: on a UDP-open box ICE still finds a real public route,
+			// surfaces a real srflx, flips mSurfacedPublicCandidate, and
+			// suppresses fabrication — so the test would spuriously fail on
+			// dev machines while passing in production (always behind a proxy
+			// with proxy_only_if_behind_proxy=true). proxy_only=true reproduces
+			// the production "no real srflx, must fabricate" condition with no
+			// live proxy needed. This is the unconditional form of the
+			// ice.proxy_only_if_behind_proxy pref already in camoufox.cfg.
+			firefox_user_prefs: {
+				"media.peerconnection.ice.proxy_only": true,
+			},
 		});
 		try {
 			const page = await browser.newPage();
