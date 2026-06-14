@@ -10,8 +10,7 @@
 		"test:upstream-only": "bash tests-camoufox-js/run-tests.sh --upstream-only",
 		"test:vitest": "vitest --config tests-camoufox-js/vitest.config.ts",
 		"copy-files": "cp -r src/data-files dist/data-files",
-		"check": "biome check",
-		"preinstall": "npx only-allow pnpm"
+		"check": "biome check"
 	},
 	"bin": "dist/__main__.js",
 	"files": [
@@ -28,19 +27,19 @@
 		"url": "https://github.com/apify/camoufox-js/issues"
 	},
 	"engines": {
-		"node": ">= 20"
+		"node": ">= 22"
 	},
 	"license": "MPL-2.0",
 	"description": "Experimental JS port of Camoufox for Python.",
-	"packageManager": "pnpm@10.24.0",
+	"packageManager": "pnpm@10.33.4",
 	"dependencies": {
 		"adm-zip": "^0.5.16",
-		"better-sqlite3": "^12.2.0",
+		"better-sqlite3": "^12.10.0",
 		"cli-progress": "^3.12.0",
 		"commander": "^14.0.0",
 		"fingerprint-generator": "^2.1.66",
 		"glob": "^13.0.0",
-		"impit": "^0.13.0",
+		"impit": "^0.14.1",
 		"language-tags": "^2.0.1",
 		"maxmind": "^5.0.0",
 		"pretty-bytes": "^7.1.0",
@@ -62,5 +61,12 @@
 	},
 	"peerDependencies": {
 		"playwright-core": "*"
+	},
+	"devEngines": {
+		"packageManager": {
+			"name": "pnpm",
+			"version": "10.33.4",
+			"onFail": "warn"
+		}
 	}
 }

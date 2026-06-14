@@ -14,7 +14,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                node-version: [20, 22, 24]
+                node-version: [22, 24, 26]
         steps:
             - name: Checkout code
               uses: actions/checkout@v6
@@ -26,7 +26,7 @@ jobs:
                   package-manager-cache: false
 
             - name: Install pnpm and dependencies
-              uses: apify/workflows/pnpm-install@main
+              uses: apify/actions/pnpm-install@v1.1.2
 
             - name: Check formatting + linting
               run: pnpm check
