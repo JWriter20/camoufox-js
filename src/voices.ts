@@ -42,7 +42,7 @@ const ESSENTIAL_MAC = new Set([
 // Real Firefox URI prefixes per backend.
 // macOS NSSpeechSynthesizer -> "urn:moz-tts:osx:<identifier>"
 // Windows SAPI -> "urn:moz-tts:sapi:<token>"
-// Linux speech-dispatcher -> "urn:moz-tts:speechd:<index>"
+// Linux speech-dispatcher -> "urn:moz-tts:speechd:<name>?<lang>" (see below)
 const URI_PREFIX = {
 	mac: "urn:moz-tts:osx:",
 	win: "urn:moz-tts:sapi:",
@@ -59,6 +59,35 @@ function uriSlug(name: string): string {
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, ".")
 		.replace(/^\.|\.$/g, "");
+}
+
+function voiceUriFor(
+	osKey: "mac" | "win" | "lin",
+	name: string,
+	lang: string,
+): string {
+	if (osKey === "lin") {
+		// Match Firefox's SpeechDispatcherService.cpp exactly:
+		//   uri = "urn:moz-tts:speechd:" + NS_EscapeURL(name, OnlyNonASCII|Spaces)
+		//          + "?" + lang
+		// i.e. spaces -> %20 and non-ASCII bytes -> %XX, but ASCII punctuation
+		// like ()/, is left intact. encodeURIComponent over-escapes (it would
+		// turn "(" into %28), so escape only spaces + non-ASCII to mirror the
+		// real backend byte-for-byte.
+		const escaped = Array.from(name)
+			.map((ch) => {
+				if (ch === " ") return "%20";
+				// ASCII (code <= 0x7F) is passed through verbatim, matching
+				// esc_OnlyNonASCII; everything else is percent-encoded per UTF-8 byte.
+				if (ch.charCodeAt(0) <= 0x7f) return ch;
+				return Array.from(new TextEncoder().encode(ch))
+					.map((b) => `%${b.toString(16).toUpperCase().padStart(2, "0")}`)
+					.join("");
+			})
+			.join("");
+		return `${URI_PREFIX.lin}${escaped}?${lang}`;
+	}
+	return `${URI_PREFIX[osKey]}${uriSlug(name)}`;
 }
 
 function parseVoiceEntry(
@@ -81,7 +110,7 @@ function parseVoiceEntry(
 	return {
 		name,
 		lang,
-		voiceUri: `${URI_PREFIX[osKey]}${uriSlug(name)}`,
+		voiceUri: voiceUriFor(osKey, name, lang),
 		isDefault: false,
 		isLocalService: type === "local",
 	};
@@ -98,13 +127,15 @@ function osToKey(os: string): "mac" | "win" | "lin" {
  *
  *   macOS:   essential voices + random 40-80% of the rest
  *   Windows: full set (only ~50 voices, subsetting reads as suspicious)
- *   Linux:   empty — callers should NOT override on Linux. A typical Ubuntu
- *            desktop has speech-dispatcher + espeak-ng running with a
- *            13k-voice catalog (102 speaker variants × 130 langs), and
- *            host-and-spoof both being Linux means letting the native
- *            registration run is more authentic than any synthesized list.
- *            Returned [] is a sentinel meaning "no override" — the call
- *            site should leave `voices:blockIfNotDefined` unset.
+ *   Linux:   full set. A Linux Firefox enumerates speech-dispatcher's
+ *            voices; with the default espeak-ng backend that's a fixed
+ *            ~131-voice base-language list, identical across installs (the
+ *            per-speaker +variant combos are espeak-ng internals, not
+ *            distinct speechd voices Firefox sees). Because it's fixed,
+ *            subsetting it would itself be a tell, so ship the whole list —
+ *            same rationale as Windows. This runs regardless of the HOST
+ *            OS: a Windows/macOS host spoofing a Linux identity would
+ *            otherwise leak its native SAPI/NSSpeech voices.
  *
  * Returned shape matches MaskConfig::MVoices() — array of objects with
  * {lang, name, voiceUri, isDefault, isLocalService}. Anything else
@@ -121,7 +152,10 @@ export function generateVoiceSubset(os: string, locale?: string): Voice[] {
 		.filter((v): v is Voice => v !== null);
 
 	let selected: Voice[];
-	if (osKey === "win") {
+	if (osKey === "win" || osKey === "lin") {
+		// Full deterministic set — both espeak-ng (Linux) and SAPI (Windows)
+		// expose a fixed list that's the same across installs, so subsetting
+		// would be anomalous.
 		selected = parsed;
 	} else if (osKey === "mac") {
 		const essential = parsed.filter((v) => ESSENTIAL_MAC.has(v.name));
@@ -135,8 +169,9 @@ export function generateVoiceSubset(os: string, locale?: string): Voice[] {
 			.map((x) => x.v);
 		selected = [...essential, ...shuffled];
 	} else {
-		// lin: empty
-		return [];
+		// osKey is "mac" | "win" | "lin"; all are handled above.
+		const _exhaustive: never = osKey;
+		return _exhaustive;
 	}
 
 	// Mark default voice. CreepJS's speech detector compares the default

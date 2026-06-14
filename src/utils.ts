@@ -820,23 +820,20 @@ export async function launchOptions({
 		handleLocales(locale, config);
 	}
 
-	// Per-OS speech voice list. Without this, Firefox registers the host's
-	// speech-dispatcher / SAPI / NSSpeech voices into navigator.speechSynthesis.
-	// On a Linux host that's the eSpeak catalog (~13k entries) — a glaring
-	// "Linux underneath" signal in any spoofed Mac/Windows context. The
-	// camoufox C++ patch (voice-spoofing.patch) provides MVoices() for an
-	// override list and `voices:blockIfNotDefined` to suppress the native
-	// registration; we feed both here. User-supplied `config.voices` wins.
+	// Per-OS speech voice list. Without this, Firefox registers the HOST
+	// machine's speech-dispatcher / SAPI / NSSpeech voices into
+	// navigator.speechSynthesis — so a spoofed identity leaks whatever OS the
+	// wrapper actually runs on (e.g. a Windows host spoofing macOS exposes
+	// SAPI voices; a Linux host spoofing Windows exposes the eSpeak catalog).
+	// Override with a list matching the SPOOFED OS for every target, including
+	// Linux. The camoufox C++ patch (voice-spoofing.patch) provides MVoices()
+	// for the override list and `voices:blockIfNotDefined` to suppress the
+	// native registration; we feed both here. User-supplied `config.voices`
+	// wins.
 	//
 	// Runs AFTER locale handling so the default-voice picker can match the
 	// spoofed locale prefix and avoid CreepJS's voiceLangMismatch flag.
-	//
-	// Linux target intentionally falls through: production camoufox runs on
-	// a Linux host, so the native speech-dispatcher voices ARE the authentic
-	// fingerprint. Synthesizing a "Linux-like" list would diverge from
-	// whatever espeak-ng version the host is running and look wrong. Better
-	// to let the native registration win.
-	if (targetOS !== "lin" && !isDomainSet(config, "voices")) {
+	if (!isDomainSet(config, "voices")) {
 		const lang = config["locale:language"] as string | undefined;
 		const region = config["locale:region"] as string | undefined;
 		const localeStr = lang && region ? `${lang}-${region}` : lang;
