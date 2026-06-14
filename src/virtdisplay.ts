@@ -39,7 +39,7 @@ export class VirtualDisplay {
 		return [
 			"-screen",
 			"0",
-			"1920x1080x24",
+			"1x1x24",
 			"-ac",
 			"-nolisten",
 			"tcp",
