@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, describe, expect, test } from "vitest";
 import { VirtualDisplay } from "../src/virtdisplay";
@@ -119,6 +120,40 @@ describe.skipIf(process.platform !== "linux")("VirtualDisplay", () => {
 		// Spawning thousands of Xvfb processes is genuinely slow.
 		Math.max(5_000, N * 200),
 	);
+
+	// Defect-2 regression: kill() must reap session helpers (dbus/portal/at-spi)
+	// the browser spawns into our DISPLAY but outside Xvfb's process group. We
+	// stand in a decoy `sleep` advertising DISPLAY=:<ourNum> in its environ — the
+	// exact thing the /proc sweep matches — and assert kill() takes it down.
+	test("kill() reaps non-child processes bound to our DISPLAY", async () => {
+		const vd = track(new VirtualDisplay());
+		const display = await vd.get();
+		const num = display.slice(1);
+
+		const decoy = spawn("sleep", ["30"], {
+			env: { ...process.env, DISPLAY: `:${num}` },
+		});
+		await sleep(100);
+		expect(decoy.pid).toBeDefined();
+		expect(decoy.killed || decoy.exitCode !== null).toBe(false);
+
+		vd.kill();
+		const deadline = Date.now() + 4_000;
+		while (Date.now() < deadline && decoy.exitCode === null) await sleep(50);
+		tracked.delete(vd);
+		expect(decoy.exitCode !== null || decoy.signalCode !== null).toBe(true);
+	}, 15_000);
+
+	// The disconnect listener may fire kill() and then close() fires it again.
+	// The _display guard must make the second call a no-op, not throw.
+	test("kill() is idempotent", async () => {
+		const vd = track(new VirtualDisplay());
+		await vd.get();
+		vd.kill();
+		await waitForExit(vd);
+		expect(() => vd.kill()).not.toThrow();
+		tracked.delete(vd);
+	}, 15_000);
 
 	test("released display numbers can be reused on the next launch", async () => {
 		const a = track(new VirtualDisplay());

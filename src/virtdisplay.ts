@@ -1,6 +1,12 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { randomInt } from "node:crypto";
-import { accessSync, constants as fsConstants, promises as fsP } from "node:fs";
+import {
+	accessSync,
+	constants as fsConstants,
+	promises as fsP,
+	readdirSync,
+	readFileSync,
+} from "node:fs";
 import {
 	CannotExecuteXvfb,
 	CannotFindXvfb,
@@ -185,17 +191,30 @@ export class VirtualDisplay {
 		return `:${this._display}`;
 	}
 
+	// Reaps the whole X session, not just Xvfb. Group-kills the detached Xvfb
+	// leader, then sweeps every proc on our DISPLAY (the dbus/portal/at-spi/gvfsd
+	// helpers the browser parented outside Xvfb's group). DISPLAY ≥ 1000 is unique
+	// to us, so the sweep can't touch another browser's tree or a static :0/:99.
 	public kill(): void {
-		if (this.proc && this.proc.exitCode === null && !this.proc.killed) {
-			if (this.debug) {
-				console.log("Terminating virtual display:", this._display);
+		if (this._display == null) return;
+		const num = this._display;
+		this._display = null;
+		const needle = `DISPLAY=:${num}\0`;
+		const sweep = (sig: NodeJS.Signals) => {
+			if (this.proc?.pid)
+				try {
+					process.kill(-this.proc.pid, sig);
+				} catch {}
+			for (const ent of readdirSync("/proc")) {
+				if (!/^\d+$/.test(ent)) continue;
+				try {
+					if (readFileSync(`/proc/${ent}/environ`, "utf8").includes(needle))
+						process.kill(Number(ent), sig);
+				} catch {}
 			}
-			try {
-				this.proc.kill("SIGKILL");
-			} catch {
-				/* ignore */
-			}
-		}
+		};
+		sweep("SIGTERM");
+		setTimeout(() => sweep("SIGKILL"), 1500).unref();
 	}
 
 	private static assert_linux(): void {

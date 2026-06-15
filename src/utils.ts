@@ -346,6 +346,10 @@ async function _asyncAttachVD(
 		}
 	};
 
+	// close() never runs on an unexpected disconnect, so wire teardown directly;
+	// kill() is idempotent, so a later close() is harmless.
+	browser.on?.("disconnected", () => virtualDisplay.kill());
+
 	browser._virtualDisplay = virtualDisplay;
 
 	return browser;
@@ -374,6 +378,10 @@ export function syncAttachVD(
 			}
 		}
 	};
+
+	// close() never runs on an unexpected disconnect, so wire teardown directly;
+	// kill() is idempotent, so a later close() is harmless.
+	browser.on?.("disconnected", () => virtualDisplay.kill());
 
 	browser._virtualDisplay = virtualDisplay;
 
