@@ -3,6 +3,16 @@ yarn.lock
 .yarn
 .npmrc
 scripts/
+# Track the FF-upgrade harness tooling that lives under scripts/ (the compare
+# tools + the SPOOF_OS/PINNED_FP-aware sundial-capture). Everything else in
+# scripts/ (ad-hoc screenshots, throwaway captures) stays ignored.
+!scripts/
+scripts/*
+!scripts/compare/
+!scripts/sundial-capture.mjs
+scripts/compare/*
+!scripts/compare/*.mjs
+!scripts/compare/*.json
 *.mmdb
 dist/
 tests-camoufox-js/.upstream-cache/

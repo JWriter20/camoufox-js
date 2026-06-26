@@ -1,0 +1,47 @@
+{
+  "_doc": "Classification rules for normalize-sundial.mjs / compare-sundial.mjs. Every (section,label) value extracted from a Sundial capture is bucketed into one of: DROP (volatile, never compared), PROXY_DERIVED (follows geoip:true from the proxy exit IP — compared by shape/consistency, not exact value), or SPOOFED_STABLE (the default: must match exactly between old and new builds run with the same `os` spoof). A value is also DROPped if it matches any volatileValuePattern, regardless of label. Matching is case-insensitive substring for label rules, and regex for value patterns. See normalize-sundial.mjs for how these are applied.",
+
+  "dropLabelSubstrings": [
+    "ip address", "ip list", "exit ip", "public ip", "egress",
+    "foundation", "candidate count", "ice candidate", "icecandidate",
+    "getstats ip",
+    "timestamp", "local time", "localtime", "uptime",
+    "session", "token", "jwt", "cookie", "nonce", "request id", "test id",
+    "uuid", "trace id",
+    "rtt", "latency", "ping", "round trip", "refresh rate",
+    "asn", "isp", "organization", "org name", "geo ", "geoip", "city", "region",
+    "country", "postal", "coordinates", "latitude", "longitude",
+    "connection.downlink", "connection.rtt",
+
+    "history.length",
+    "performance.timeorigin", "performance.now", "performance.eventcounts",
+    "resoverflow", "stack depth", "recursion",
+    "analysernode.getfloatfrequencydata hash", "analysernode.getbytefrequencydata hash",
+    "analysernode.getfloattimedomaindata hash", "analysernode.getbytetimedomaindata hash",
+    "analysernode.getfloatfrequencydata sum", "analysernode.getfloattimedomaindata sum",
+    "dynamicscompressor.reduction"
+  ],
+
+  "_dropLabelNotes": "Deliberately NOT dropping by label: verdict rows whose value is just pass/ok/fail ('WebRTC private IP leak', 'SDP private IP leak', 'WebRTC leak verdict') — these are STABLE signals, and their values carry no IP so the volatileValuePatterns leave them alone. 'connection.type' is a stable capability signal (kept). Broad words like 'date'/'time'/'raf' were narrowed ('local time', 'refresh rate') so we don't nuke 'DateTimeFormat'/'time zone' stable rows. The second block (history.length / performance.* / ResOverflow / live AnalyserNode reads / DynamicsCompressor.reduction) is empirically run-to-run volatile EVEN with a pinned fingerprint + zeroed audio seed: they measure live float/timing/stack state, not fingerprint identity. The STABLE audio identity hashes ('Fingerprint audio hash', 'Audio fingerprint (osc+comp hash)', 'OscillatorNode/AnalyserNode/DynamicsCompressorNode N property fields hash') are NOT in this list and remain compared — only the realtime AnalyserNode *data* reads jitter. Confirmed by a pinned same-build two-run dropping 43→0 divergences.",
+
+  "proxyDerivedLabelSubstrings": [
+    "timezone", "time zone", "tz offset", "utc offset",
+    "locale", "language", "languages", "accept-language"
+  ],
+
+  "volatileValuePatterns": [
+    "\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b",
+    "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.local",
+    "\\b(?:[0-9a-fA-F]{1,4}:){2,}[0-9a-fA-F:]+\\b",
+    "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}",
+    "\\bGMT[+-]\\d{4}\\b"
+  ],
+
+  "_notes": {
+    "spoofed_stable_examples": "fonts list + count, canvas/DOMRect hash, WebGL vendor/unmasked renderer, audio hash/sampleRate, navigator.platform/oscpu, screen.width/height/avail, colorDepth, hardwareConcurrency, CSS.supports probe bitmask, WebRTCHash composite (after stripping the mDNS/IP rows above). These are NOT listed individually — anything not matched by a DROP or PROXY_DERIVED rule defaults to SPOOFED_STABLE and must match exactly.",
+    "why_webrtc_rows_drop": "The Network section mixes stable WebRTC capability signals (codec matrices, SDP counts, leak verdict 'pass') with per-session volatile values (mDNS UUID hostnames like <uuid>.local, the gathered IP list, ICE foundation/candidate counts). The volatileValuePatterns strip the UUID/IP-bearing rows so the stable capability signals still compare; 'foundation'/'ice candidate'/'ip list' label drops cover the rest.",
+    "why_refresh_rate_drops": "Display refresh rate (rAF) is measured as 'N Hz' and varies with Xvfb scheduling load between runs — not a browser-identity signal.",
+    "proxy_derived_shape_check": "compare-sundial.mjs does NOT fail when a PROXY_DERIVED value changes; it only checks the value is still well-formed (e.g. timezone is a valid-looking IANA zone, language is a BCP-47 tag). A malformed/empty proxy-derived value where the baseline had a good one IS flagged, because that indicates the geoip path broke."
+  }
+}
